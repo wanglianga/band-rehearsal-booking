@@ -1,0 +1,118 @@
+# 社区乐队排练室预约系统
+
+一个基于 Svelte + Vite 构建的社区乐队排练室预约页面，支持队长预约、成员确认和社区墙面屏三种视图。
+
+## 原始需求
+
+> 请制作社区乐队排练室预约页，Svelte 视图围绕房间时段、鼓组、贝斯箱、吉他音箱、麦克风、键盘、录音接口、成员确认、噪音限制和费用分摊展开。队长在手机上挑排练时间、勾选设备、邀请成员确认到场并设置 AA 方式；成员端看到自己负责的乐器、到场倒计时、是否已付款和录音需求，社区墙面屏显示下一场队伍、设备借用和空闲窗口。页面要有排练室的节奏感，时段拖动、设备图标、成员头像和冲突提示要顺滑，别让预约像填写行政表。
+
+## 功能特点
+
+- **队长端**：日期选择、房间选择、时段拖拽选择、设备借用勾选、成员邀请、AA费用分摊模式、录音需求设置
+- **成员端**：个人资料、到场倒计时、我的乐器、排练信息、费用支付状态、录音需求、成员到场列表
+- **墙面屏**：下一场排练展示、实时时钟、设备借用状态、今日排期、空闲时段时间轴
+- 深色主题，音乐感视觉风格
+- 流畅的交互动画和过渡效果
+- 响应式设计，适配手机和大屏
+
+## 技术栈
+
+- Svelte 4
+- Vite 5
+- Svelte Stores（状态管理）
+- Nginx（生产部署）
+
+## 启动方式
+
+### 前置要求
+
+- Node.js 18+
+- npm 或 pnpm
+
+### 本地开发启动步骤
+
+#### 1. 安装依赖
+
+```bash
+npm install
+```
+
+#### 2. 启动开发服务
+
+```bash
+npm run dev
+```
+
+访问地址：http://localhost:5173
+
+#### 3. 构建生产版本
+
+```bash
+npm run build
+```
+
+#### 4. 预览生产构建
+
+```bash
+npm run preview
+```
+
+### Docker 一键启动（推荐）
+
+#### 前置要求
+
+- Docker 20+
+- Docker Compose 2+
+
+#### 启动命令
+
+```bash
+docker compose up --build
+```
+
+后台运行：
+
+```bash
+docker compose up --build -d
+```
+
+停止服务：
+
+```bash
+docker compose down
+```
+
+访问地址：http://localhost:5173
+
+## 项目结构
+
+```
+.
+├── src/
+│   ├── data/
+│   │   └── mockData.js      # 模拟数据（房间、设备、成员、时段等）
+│   ├── stores/
+│   │   └── bookingStore.js  # Svelte 状态管理
+│   ├── views/
+│   │   ├── LeaderView.svelte      # 队长端视图
+│   │   ├── MemberView.svelte      # 成员端视图
+│   │   └── WallDisplayView.svelte # 社区墙面屏视图
+│   ├── App.svelte         # 主应用组件
+│   ├── main.js            # 入口文件
+│   └── app.css            # 全局样式
+├── Dockerfile
+├── docker-compose.yml
+├── .dockerignore
+├── nginx.conf
+├── vite.config.js
+└── package.json
+```
+
+## 视图切换
+
+页面顶部有三个切换按钮：
+- 🎸 队长端
+- 👤 成员端
+- 🖥️ 墙面屏
+
+点击即可在不同视图间切换。
