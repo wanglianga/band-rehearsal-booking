@@ -4,7 +4,7 @@
     bandMembers, currentMemberId, memberConfirmations, memberPayments,
     selectedDate, selectedRoom, selectedSlots, selectedEquipments,
     rooms, timeSlots, equipments, pricePerPerson, recordingNeeded,
-    bandName
+    bandName, RECORDING_EQUIPMENT_IDS
   } from '../stores/bookingStore.js'
 
   let countdown = { hours: 0, minutes: 0, seconds: 0 }
@@ -26,9 +26,7 @@
     return inst ? [inst] : []
   })()
 
-  $: borrowedEquipments = getBorrowedEquipments()
-  
-  function getBorrowedEquipments() {
+  $: borrowedEquipments = (() => {
     if (!currentMember) return []
     const eqMap = {
       'vocals': ['mic-1'],
@@ -39,12 +37,23 @@
     }
     const myEqIds = eqMap[currentMember.instrument] || []
     if ($recordingNeeded) {
-      myEqIds.push('audio-interface', 'monitor')
+      RECORDING_EQUIPMENT_IDS.forEach(id => {
+        if (!myEqIds.includes(id)) {
+          myEqIds.push(id)
+        }
+      })
     }
     return myEqIds
       .map(id => equipments.find(e => e.id === id))
       .filter(e => e && $selectedEquipments.includes(e.id))
-  }
+  })()
+
+  $: recordingEquipments = (() => {
+    if (!$recordingNeeded) return []
+    return RECORDING_EQUIPMENT_IDS
+      .map(id => equipments.find(e => e.id === id))
+      .filter(e => e && $selectedEquipments.includes(e.id))
+  })()
 
   function updateCountdown() {
     const now = new Date()
@@ -222,9 +231,17 @@
       </div>
       <p class="recording-desc">本次排练将进行录音，请提前准备好你的最佳状态！</p>
       <div class="recording-equip">
-        <span>🎚️ 录音接口</span>
-        <span>🎧 监听耳机</span>
+        {#each recordingEquipments as eq}
+          {#if eq}
+            <span>{eq.icon} {eq.name} · ¥{eq.price * $selectedSlots.length}</span>
+          {/if}
+        {/each}
       </div>
+      {#if recordingEquipments.length > 0}
+        <div class="recording-cost">
+          录音设备合计：¥{recordingEquipments.reduce((sum, e) => sum + (e?.price || 0) * $selectedSlots.length, 0)}
+        </div>
+      {/if}
     </section>
   {/if}
 
@@ -601,6 +618,15 @@
     background: var(--bg-card-hover);
     border-radius: 20px;
     font-size: 12px;
+  }
+
+  .recording-cost {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 600;
   }
 
   .members-attendance {

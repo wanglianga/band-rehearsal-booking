@@ -1,6 +1,8 @@
 import { writable, derived } from 'svelte/store'
 import { rooms, equipments, bandMembers, timeSlots, aaModes, existingBookings } from '../data/mockData.js'
 
+export const RECORDING_EQUIPMENT_IDS = ['audio-interface', 'monitor']
+
 export const currentView = writable('leader')
 
 export const selectedDate = writable('2026-06-20')
@@ -10,6 +12,22 @@ export const selectedEquipments = writable(['drum-set', 'mic-1'])
 export const invitedMembers = writable(['m1', 'm2', 'm3', 'm4'])
 export const selectedAaMode = writable('equal')
 export const recordingNeeded = writable(false)
+
+recordingNeeded.subscribe(needRecording => {
+  selectedEquipments.update(eqs => {
+    let newEqs = [...eqs]
+    if (needRecording) {
+      RECORDING_EQUIPMENT_IDS.forEach(id => {
+        if (!newEqs.includes(id)) {
+          newEqs.push(id)
+        }
+      })
+    } else {
+      newEqs = newEqs.filter(id => !RECORDING_EQUIPMENT_IDS.includes(id))
+    }
+    return newEqs
+  })
+})
 export const bandName = writable('银河乐队')
 export const memberConfirmations = writable({
   m1: 'confirmed',

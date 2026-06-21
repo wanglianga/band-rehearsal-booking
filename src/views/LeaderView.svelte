@@ -3,7 +3,7 @@
     rooms, equipments, bandMembers, timeSlots, aaModes,
     selectedDate, selectedRoom, selectedSlots, selectedEquipments,
     invitedMembers, selectedAaMode, recordingNeeded, bandName,
-    totalPrice, pricePerPerson, conflictSlots
+    totalPrice, pricePerPerson, conflictSlots, RECORDING_EQUIPMENT_IDS
   } from '../stores/bookingStore.js'
 
   let dragStartSlot = null
@@ -60,7 +60,14 @@
     dragStartSlot = null
   }
 
+  function isRecordingEquipment(equipId) {
+    return RECORDING_EQUIPMENT_IDS.includes(equipId)
+  }
+
   function toggleEquipment(equipId) {
+    if ($recordingNeeded && isRecordingEquipment(equipId)) {
+      return
+    }
     const idx = $selectedEquipments.indexOf(equipId)
     if (idx >= 0) {
       selectedEquipments.update(eqs => {
@@ -195,9 +202,13 @@
     <div class="equipment-grid">
       {#each equipments as eq}
         <button
-          class="equip-card {$selectedEquipments.includes(eq.id) ? 'selected' : ''}"
+          class="equip-card {$selectedEquipments.includes(eq.id) ? 'selected' : ''} {$recordingNeeded && isRecordingEquipment(eq.id) ? 'locked' : ''}"
           on:click={() => toggleEquipment(eq.id)}
+          disabled={$recordingNeeded && isRecordingEquipment(eq.id)}
         >
+          {#if $recordingNeeded && isRecordingEquipment(eq.id)}
+            <span class="lock-badge">🔒 录音必需</span>
+          {/if}
           <div class="equip-icon">{eq.icon}</div>
           <div class="equip-name">{eq.name}</div>
           <div class="equip-price">
@@ -533,6 +544,31 @@
 
   .equip-price .free {
     color: var(--success);
+  }
+
+  .equip-card.locked {
+    position: relative;
+    border-color: var(--accent);
+    background: rgba(0, 212, 255, 0.1);
+    cursor: not-allowed;
+    opacity: 0.95;
+  }
+
+  .equip-card.locked:hover {
+    transform: none;
+  }
+
+  .lock-badge {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    padding: 2px 6px;
+    background: var(--accent);
+    color: var(--bg-dark);
+    font-size: 9px;
+    font-weight: 600;
+    border-radius: 8px;
+    white-space: nowrap;
   }
 
   .member-list {
