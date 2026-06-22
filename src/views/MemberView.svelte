@@ -4,7 +4,8 @@
     bandMembers, currentMemberId, memberConfirmations, memberPayments,
     selectedDate, selectedRoom, selectedSlots, selectedEquipments,
     rooms, timeSlots, equipments, pricePerPerson, recordingNeeded,
-    bandName, RECORDING_EQUIPMENT_IDS
+    bandName, RECORDING_EQUIPMENT_IDS, attendanceAnalysis,
+    equipmentConflicts, KEY_ROLES, downgradedToSectional, backupMembers
   } from '../stores/bookingStore.js'
 
   let countdown = { hours: 0, minutes: 0, seconds: 0 }
@@ -245,26 +246,104 @@
     </section>
   {/if}
 
+  {#if $attendanceAnalysis.riskLevel !== 'none'}
+    <section class="info-card risk-card">
+      <div class="card-header">
+        <h3>⚠️ 排练风险提示</h3>
+        <span class="risk-badge {$attendanceAnalysis.riskLevel}">{$attendanceAnalysis.riskDescription}</span>
+      </div>
+      {#if $attendanceAnalysis.declinedKeyMembers.length > 0}
+        <div class="risk-item">
+          <span class="risk-icon">�</span>
+          <span class="risk-text">
+            关键成员缺席：{$attendanceAnalysis.declinedKeyMembers.map(m => m.name).join('、')}
+          </span>
+        </div>
+      {/if}
+      {#if $downgradedToSectional}
+        <div class="downgrade-notice">
+          已降级为分声部练习
+        </div>
+      {/if}
+      {#if !$attendanceAnalysis.keepRecording && $recordingNeeded}
+        <div class="risk-item warning">
+          <span class="risk-icon">🎙️</span>
+          <span class="risk-text">录音质量可能受影响，建议取消录音</span>
+        </div>
+      {/if}
+    </section>
+  {/if}
+
+  {#if $equipmentConflicts.hasConflict}
+    <section class="info-card conflict-card">
+      <div class="card-header">
+        <h3>⚡ 设备冲突</h3>
+        <span class="conflict-badge">冲突 {$equipmentConflicts.conflicts.length} 项</span>
+      </div>
+      {#each $equipmentConflicts.conflicts as conflict}
+        <div class="conflict-item">
+          <span class="conflict-icon">{conflict.eqIcon}</span>
+          <span class="conflict-text">
+            {conflict.eqName} 与「{conflict.conflictWith}」冲突
+          </span>
+        </div>
+      {/each}
+      <div class="conflict-note">
+        队长正在处理中...
+      </div>
+    </section>
+  {/if}
+
   <section class="info-card">
     <div class="card-header">
-      <h3>👥 成员到场</h3>
+      <h3>� 成员到场</h3>
+      <span class="attend-count">
+        {$attendanceAnalysis.confirmedCount}/{$attendanceAnalysis.totalInvited} 已确认
+      </span>
     </div>
     <div class="members-attendance">
-      {#each bandMembers as member}
+      {#each $attendanceAnalysis.confirmed as member}
       <div class="attend-item">
         <div class="attend-avatar">{member.avatar}</div>
         <div class="attend-info">
           <span class="attend-name">{member.name}</span>
           <span class="attend-role">{member.role}</span>
-        </div>
-        <div class="attend-status {$memberConfirmations[member.id] || 'pending'}">
-          {#if $memberConfirmations[member.id] === 'confirmed'}
-            ✓
-          {:else if $memberConfirmations[member.id] === 'declined'}
-            ✗
-          {:else}
-            ?
+          {#if KEY_ROLES.includes(member.instrument)}
+            <span class="key-tag">关键</span>
           {/if}
+        </div>
+        <div class="attend-status confirmed">
+          ✓
+        </div>
+      </div>
+      {/each}
+      {#each $attendanceAnalysis.pending as member}
+      <div class="attend-item">
+        <div class="attend-avatar">{member.avatar}</div>
+        <div class="attend-info">
+          <span class="attend-name">{member.name}</span>
+          <span class="attend-role">{member.role}</span>
+          {#if KEY_ROLES.includes(member.instrument)}
+            <span class="key-tag">关键</span>
+          {/if}
+        </div>
+        <div class="attend-status pending">
+          ?
+        </div>
+      </div>
+      {/each}
+      {#each $attendanceAnalysis.declined as member}
+      <div class="attend-item declined">
+        <div class="attend-avatar">{member.avatar}</div>
+        <div class="attend-info">
+          <span class="attend-name">{member.name}</span>
+          <span class="attend-role">{member.role}</span>
+          {#if KEY_ROLES.includes(member.instrument)}
+            <span class="key-tag">关键</span>
+          {/if}
+        </div>
+        <div class="attend-status declined">
+          ✗
         </div>
       </div>
       {/each}
@@ -736,5 +815,144 @@
 
   .action-btn.confirm:hover {
     box-shadow: 0 6px 20px rgba(255, 107, 53, 0.5);
+  }
+
+  .risk-card {
+    background: linear-gradient(135deg, rgba(255, 71, 87, 0.08), rgba(255, 71, 87, 0.03));
+    border-color: rgba(255, 71, 87, 0.2);
+  }
+
+  .conflict-card {
+    background: linear-gradient(135deg, rgba(255, 170, 0, 0.08), rgba(255, 170, 0, 0.03));
+    border-color: rgba(255, 170, 0, 0.2);
+  }
+
+  .risk-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .risk-badge.high {
+    background: rgba(255, 71, 87, 0.2);
+    color: var(--danger);
+  }
+
+  .risk-badge.medium {
+    background: rgba(255, 170, 0, 0.2);
+    color: var(--warning);
+  }
+
+  .risk-badge.low {
+    background: rgba(0, 212, 255, 0.2);
+    color: var(--accent);
+  }
+
+  .risk-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--bg-card-hover);
+    border-radius: 10px;
+    margin-bottom: 8px;
+  }
+
+  .risk-item:last-child {
+    margin-bottom: 0;
+  }
+
+  .risk-item.warning {
+    background: rgba(255, 170, 0, 0.1);
+  }
+
+  .risk-icon {
+    font-size: 18px;
+  }
+
+  .risk-text {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .downgrade-notice {
+    padding: 10px 14px;
+    background: rgba(0, 212, 255, 0.15);
+    color: var(--accent);
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    margin-top: 8px;
+  }
+
+  .conflict-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(255, 71, 87, 0.2);
+    color: var(--danger);
+  }
+
+  .conflict-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--bg-card-hover);
+    border-radius: 10px;
+    margin-bottom: 6px;
+  }
+
+  .conflict-icon {
+    font-size: 18px;
+  }
+
+  .conflict-text {
+    flex: 1;
+    font-size: 13px;
+    color: var(--text-secondary);
+  }
+
+  .conflict-note {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+  }
+
+  .attend-count {
+    font-size: 12px;
+    color: var(--text-muted);
+    background: var(--bg-card-hover);
+    padding: 4px 10px;
+    border-radius: 12px;
+  }
+
+  .key-tag {
+    display: inline-block;
+    padding: 2px 6px;
+    background: var(--primary);
+    color: white;
+    font-size: 10px;
+    border-radius: 8px;
+    margin-left: 6px;
+    font-weight: 600;
+  }
+
+  .attend-item.declined {
+    opacity: 0.6;
+    background: rgba(255, 71, 87, 0.05);
+  }
+
+  .attend-info {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
   }
 </style>

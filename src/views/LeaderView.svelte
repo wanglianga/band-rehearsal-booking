@@ -1,9 +1,13 @@
 <script>
   import { 
-    rooms, equipments, bandMembers, timeSlots, aaModes,
+    rooms, equipments, bandMembers, timeSlots, aaModes, backupMembers,
     selectedDate, selectedRoom, selectedSlots, selectedEquipments,
     invitedMembers, selectedAaMode, recordingNeeded, bandName,
-    totalPrice, pricePerPerson, conflictSlots, RECORDING_EQUIPMENT_IDS
+    totalPrice, pricePerPerson, conflictSlots, RECORDING_EQUIPMENT_IDS,
+    attendanceAnalysis, equipmentConflicts, memberConfirmations, KEY_ROLES, CONFLICT_EQUIPMENT_IDS,
+    submitBooking, confirmConflictSolution, downgradeToSectional, rescheduleBooking,
+    equipmentConflictResolved, selectedConflictSolution, downgradedToSectional,
+    currentBookingId
   } from '../stores/bookingStore.js'
 
   let dragStartSlot = null
@@ -225,6 +229,144 @@
 
   <section class="section">
     <div class="section-header">
+      <h2>⚡ 设备占用检测</h2>
+      {#if $equipmentConflicts.hasConflict}
+        <span class="conflict-badge">冲突 {$equipmentConflicts.conflicts.length} 项</span>
+      {:else}
+        <span class="conflict-badge resolved">无冲突</span>
+      {/if}
+    </div>
+
+    {#if $equipmentConflicts.hasConflict}
+      <div class="conflict-list">
+        <div class="conflict-title">⚠️ 与其他乐队存在设备冲突</div>
+        {#each $equipmentConflicts.conflicts as conflict}
+          <div class="conflict-item">
+            <span class="conflict-icon">{conflict.eqIcon}</span>
+            <div class="conflict-info">
+              <div class="conflict-eq">{conflict.eqName}</div>
+              <div class="conflict-with">与「{conflict.conflictWith}」冲突 · {conflict.conflictRoom}</div>
+            </div>
+            <span class="conflict-tag">冲突</span>
+          </div>
+        {/each}
+      </div>
+
+      <div class="solutions-section">
+        <div class="solutions-title">💡 解决方案</div>
+        
+        {#each $equipmentConflicts.solutions as solution}
+          <div class="solution-group">
+            <div class="solution-label">{solution.label}</div>
+            
+            {#if solution.type === 'room'}
+              <div class="solution-options">
+                {#each solution.options as opt}
+                  <button 
+                    class="solution-option"
+                    on:click={() => confirmConflictSolution({ type: 'room', selectedRoom: opt.roomId, option: opt.roomId })}
+                  >
+                    <span class="option-name">{opt.roomName}</span>
+                    <span class="option-price">
+                      {#if opt.priceDiff > 0}
+                        +¥{opt.priceDiff}/时
+                      {:else if opt.priceDiff < 0}
+                        ¥{opt.priceDiff}/时
+                      {:else}
+                        同价
+                      {/if}
+                    </span>
+                  </button>
+                {/each}
+              </div>
+            {/if}
+
+            {#if solution.type === 'timeslot'}
+              <div class="solution-options">
+                {#if solution.earlierOptions && solution.earlierOptions.length > 0}
+                  <div class="timeslot-group">
+                    <span class="timeslot-label">更早时段</span>
+                    <div class="timeslot-buttons">
+                      {#each solution.earlierOptions as opt}
+                        <button 
+                          class="timeslot-btn"
+                          on:click={() => {
+                            const startIdx = timeSlots.findIndex(s => s.id === opt.slotId)
+                            const newSlots = timeSlots.slice(startIdx, startIdx + $selectedSlots.length).map(s => s.id)
+                            confirmConflictSolution({ type: 'timeslot', selectedSlots: newSlots })
+                          }}
+                        >
+                          {opt.time}
+                        </button>
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
+                {#if solution.laterOptions && solution.laterOptions.length > 0}
+                  <div class="timeslot-group">
+                    <span class="timeslot-label">更晚时段</span>
+                    <div class="timeslot-buttons">
+                      {#each solution.laterOptions as opt}
+                        <button 
+                          class="timeslot-btn"
+                          on:click={() => {
+                            const startIdx = timeSlots.findIndex(s => s.id === opt.slotId)
+                            const newSlots = timeSlots.slice(startIdx, startIdx + $selectedSlots.length).map(s => s.id)
+                            confirmConflictSolution({ type: 'timeslot', selectedSlots: newSlots })
+                          }}
+                        >
+                          {opt.time}
+                        </button>
+                      {/each}
+                    </div>
+                  </div>
+                {/if}
+              </div>
+            {/if}
+
+            {#if solution.type === 'premium'}
+              <div class="solution-options">
+                {#each solution.options as opt}
+                  <button 
+                    class="solution-option premium"
+                    on:click={() => confirmConflictSolution({ type: 'premium', option: opt.id })}
+                  >
+                    <span class="option-name">{opt.label}</span>
+                    <span class="option-price">x{opt.multiplier}</span>
+                  </button>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    {:else if $equipmentConflictResolved && $selectedConflictSolution}
+      <div class="conflict-resolved">
+        <span class="resolved-icon">✓</span>
+        <span class="resolved-text">
+          冲突已解决：
+          {#if $selectedConflictSolution.type === 'room'}
+            已更换至 {rooms.find(r => r.id === $selectedRoom)?.name}
+          {:else if $selectedConflictSolution.type === 'timeslot'}
+            已调换至 {timeSlots.find(s => s.id === $selectedSlots[0])?.start} 开始
+          {:else if $selectedConflictSolution.type === 'premium'}
+            已选择加价方案
+          {/if}
+        </span>
+        <button class="reset-btn" on:click={() => { equipmentConflictResolved.set(false); selectedConflictSolution.set(null); }}>
+          重新选择
+        </button>
+      </div>
+    {:else}
+      <div class="no-conflict">
+        <span class="no-conflict-icon">✓</span>
+        <span>所选设备在该时段无冲突</span>
+      </div>
+    {/if}
+  </section>
+
+  <section class="section">
+    <div class="section-header">
       <h2>👥 邀请成员</h2>
       <span class="hint">{$invitedMembers.length} 人参加</span>
     </div>
@@ -248,6 +390,130 @@
         </button>
       {/each}
     </div>
+  </section>
+
+  <section class="section">
+    <div class="section-header">
+      <h2>✅ 成员到场确认</h2>
+      <span class="risk-badge {$attendanceAnalysis.riskLevel}">{$attendanceAnalysis.riskDescription}</span>
+    </div>
+    
+    <div class="attendance-summary">
+      <div class="attendance-stat confirmed">
+        <span class="stat-num">{$attendanceAnalysis.confirmedCount}</span>
+        <span class="stat-label">已确认</span>
+      </div>
+      <div class="attendance-stat pending">
+        <span class="stat-num">{$attendanceAnalysis.pendingCount}</span>
+        <span class="stat-label">待确认</span>
+      </div>
+      <div class="attendance-stat declined">
+        <span class="stat-num">{$attendanceAnalysis.declinedCount}</span>
+        <span class="stat-label">已拒绝</span>
+      </div>
+      <div class="attendance-stat total">
+        <span class="stat-num">{$attendanceAnalysis.totalInvited}</span>
+        <span class="stat-label">总计</span>
+      </div>
+    </div>
+
+    {#if $attendanceAnalysis.declined.length > 0}
+      <div class="declined-list">
+        <div class="list-title">缺席成员</div>
+        {#each $attendanceAnalysis.declined as member}
+          <div class="declined-item">
+            <span class="member-avatar">{member.avatar}</span>
+            <span class="member-name">{member.name}</span>
+            <span class="member-role">{member.role}</span>
+            {#if KEY_ROLES.includes(member.instrument)}
+              <span class="key-badge">关键</span>
+            {/if}
+          </div>
+        {/each}
+      </div>
+    {/if}
+
+    {#if $attendanceAnalysis.pending.length > 0}
+      <div class="pending-list">
+        <div class="list-title">待确认</div>
+        {#each $attendanceAnalysis.pending as member}
+          <div class="pending-item">
+            <span class="member-avatar">{member.avatar}</span>
+            <span class="member-name">{member.name}</span>
+            <span class="member-role">{member.role}</span>
+            {#if KEY_ROLES.includes(member.instrument)}
+              <span class="key-badge">关键</span>
+            {/if}
+            <span class="pending-icon">⏳</span>
+          </div>
+        {/each}
+      </div>
+    {/if}
+
+    {#if $attendanceAnalysis.needBackup && $attendanceAnalysis.backupOptions.length > 0}
+      <div class="backup-section">
+        <div class="backup-title">🔄 替补推荐</div>
+        <div class="backup-list">
+          {#each $attendanceAnalysis.backupOptions as backup}
+            <button 
+              class="backup-item"
+              on:click={() => {
+                invitedMembers.update(m => [...m, backup.id])
+                memberConfirmations.update(c => ({ ...c, [backup.id]: 'pending' }))
+              }}
+            >
+              <span class="backup-avatar">{backup.avatar}</span>
+              <span class="backup-name">{backup.name}</span>
+              <span class="backup-role">{backup.role}</span>
+              <span class="backup-add">+ 邀请</span>
+            </button>
+          {/each}
+        </div>
+      </div>
+    {/if}
+
+    <div class="recording-advice">
+      <div class="advice-title">🎙️ 录音接口建议</div>
+      <div class="advice-content {$attendanceAnalysis.keepRecording ? 'keep' : 'cancel'}">
+        {#if $attendanceAnalysis.keepRecording}
+          <span class="advice-icon">✓</span>
+          <span>建议保留录音接口，已确认成员足够支撑高质量录音</span>
+        {:else if $recordingNeeded}
+          <span class="advice-icon">⚠</span>
+          <span>录音质量可能受影响，{#if $attendanceAnalysis.declinedKeyMembers.length > 0}关键成员缺席{:else}确认人数不足{/if}，建议取消录音或改期</span>
+        {:else}
+          <span class="advice-icon">○</span>
+          <span>未开启录音需求</span>
+        {/if}
+      </div>
+    </div>
+
+    {#if $attendanceAnalysis.keyMemberMissing}
+      <div class="action-alert">
+        <div class="alert-title">🚨 关键成员缺席</div>
+        <div class="alert-content">
+          {#if $attendanceAnalysis.suggestReschedule}
+            <p>建议改期：{$attendanceAnalysis.declinedKeyMembers.length} 名关键成员缺席，且 {$attendanceAnalysis.pendingKeyMembers.length} 人待确认，排练质量难以保证。</p>
+            <div class="alert-actions">
+              <button class="alert-btn primary" on:click={rescheduleBooking}>
+                重新选择时间
+              </button>
+            </div>
+          {/if}
+          {#if $attendanceAnalysis.suggestDowngrade && !$downgradedToSectional}
+            <p>可降级为分声部练习：仅 {$attendanceAnalysis.declinedKeyMembers.length} 名关键成员缺席，其余成员可进行专项练习。</p>
+            <div class="alert-actions">
+              <button class="alert-btn secondary" on:click={downgradeToSectional}>
+                降级成分声部练习
+              </button>
+            </div>
+          {/if}
+          {#if $downgradedToSectional}
+            <div class="downgrade-badge">已降级为分声部练习 · 录音已自动关闭</div>
+          {/if}
+        </div>
+      </div>
+    {/if}
   </section>
 
   <section class="section">
@@ -293,6 +559,9 @@
         <span class="price-unit">/ 总计</span>
       </div>
       <div class="price-per-person">
+        {#if $downgradedToSectional}
+          <span class="sectional-tag">分声部练习</span>
+        {/if}
         {#if $selectedAaMode === 'equal'}
           人均 ¥{$pricePerPerson}
         {:else if $selectedAaMode === 'leader'}
@@ -302,8 +571,16 @@
         {/if}
       </div>
     </div>
-    <button class="book-btn">
-      提交预约
+    <button 
+      class="book-btn" 
+      on:click={submitBooking}
+      disabled={$equipmentConflicts.hasConflict && !$equipmentConflictResolved}
+    >
+      {#if $equipmentConflicts.hasConflict && !$equipmentConflictResolved}
+        请先解决设备冲突
+      {:else}
+        提交预约
+      {/if}
     </button>
   </div>
 </div>
@@ -774,5 +1051,546 @@
   .book-btn:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(255, 107, 53, 0.5);
+  }
+
+  .book-btn:disabled {
+    background: var(--text-muted);
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+  }
+
+  .risk-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .risk-badge.high {
+    background: rgba(255, 71, 87, 0.2);
+    color: var(--danger);
+  }
+
+  .risk-badge.medium {
+    background: rgba(255, 170, 0, 0.2);
+    color: var(--warning);
+  }
+
+  .risk-badge.low {
+    background: rgba(0, 212, 255, 0.2);
+    color: var(--accent);
+  }
+
+  .risk-badge.none {
+    background: rgba(0, 214, 143, 0.2);
+    color: var(--success);
+  }
+
+  .attendance-summary {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .attendance-stat {
+    text-align: center;
+    padding: 12px 8px;
+    background: var(--bg-card-hover);
+    border-radius: 12px;
+  }
+
+  .attendance-stat .stat-num {
+    display: block;
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+
+  .attendance-stat.confirmed .stat-num { color: var(--success); }
+  .attendance-stat.pending .stat-num { color: var(--warning); }
+  .attendance-stat.declined .stat-num { color: var(--danger); }
+  .attendance-stat.total .stat-num { color: var(--accent); }
+
+  .attendance-stat .stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .declined-list, .pending-list {
+    margin-bottom: 12px;
+  }
+
+  .list-title {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+
+  .declined-item, .pending-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: var(--bg-card-hover);
+    border-radius: 10px;
+    margin-bottom: 6px;
+  }
+
+  .declined-item {
+    background: rgba(255, 71, 87, 0.08);
+  }
+
+  .declined-item .member-name,
+  .pending-item .member-name {
+    font-size: 14px;
+    font-weight: 500;
+    flex: 1;
+  }
+
+  .declined-item .member-role,
+  .pending-item .member-role {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .member-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+
+  .key-badge {
+    padding: 2px 8px;
+    background: var(--primary);
+    color: white;
+    font-size: 10px;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+
+  .pending-icon {
+    font-size: 16px;
+  }
+
+  .backup-section {
+    margin-bottom: 12px;
+  }
+
+  .backup-title {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+
+  .backup-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .backup-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    background: rgba(0, 212, 255, 0.08);
+    border-radius: 10px;
+    text-align: left;
+    color: var(--text-primary);
+    border: 1px solid transparent;
+    transition: all 0.2s;
+  }
+
+  .backup-item:hover {
+    border-color: var(--accent);
+    background: rgba(0, 212, 255, 0.15);
+  }
+
+  .backup-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-dark);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+
+  .backup-name {
+    font-size: 14px;
+    font-weight: 500;
+    flex: 1;
+  }
+
+  .backup-role {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .backup-add {
+    padding: 4px 10px;
+    background: var(--accent);
+    color: var(--bg-dark);
+    font-size: 11px;
+    border-radius: 12px;
+    font-weight: 600;
+  }
+
+  .recording-advice {
+    margin-bottom: 12px;
+  }
+
+  .advice-title {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+
+  .advice-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+
+  .advice-content.keep {
+    background: rgba(0, 214, 143, 0.1);
+    color: var(--success);
+  }
+
+  .advice-content.cancel {
+    background: rgba(255, 170, 0, 0.1);
+    color: var(--warning);
+  }
+
+  .advice-icon {
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .action-alert {
+    background: rgba(255, 71, 87, 0.08);
+    border: 1px solid rgba(255, 71, 87, 0.2);
+    border-radius: 12px;
+    padding: 16px;
+  }
+
+  .alert-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--danger);
+    margin-bottom: 8px;
+  }
+
+  .alert-content p {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+
+  .alert-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .alert-btn {
+    padding: 10px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.2s;
+  }
+
+  .alert-btn.primary {
+    background: var(--danger);
+    color: white;
+  }
+
+  .alert-btn.primary:hover {
+    background: #ff3b4f;
+  }
+
+  .alert-btn.secondary {
+    background: var(--warning);
+    color: white;
+  }
+
+  .alert-btn.secondary:hover {
+    background: #e69500;
+  }
+
+  .downgrade-badge {
+    padding: 8px 16px;
+    background: rgba(0, 212, 255, 0.2);
+    color: var(--accent);
+    border-radius: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+  }
+
+  .sectional-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    background: var(--accent);
+    color: var(--bg-dark);
+    font-size: 10px;
+    border-radius: 8px;
+    margin-right: 8px;
+    font-weight: 600;
+  }
+
+  .conflict-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(255, 71, 87, 0.2);
+    color: var(--danger);
+  }
+
+  .conflict-badge.resolved {
+    background: rgba(0, 214, 143, 0.2);
+    color: var(--success);
+  }
+
+  .conflict-list {
+    margin-bottom: 16px;
+  }
+
+  .conflict-title {
+    font-size: 13px;
+    color: var(--danger);
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+
+  .conflict-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: rgba(255, 71, 87, 0.08);
+    border-radius: 10px;
+    margin-bottom: 6px;
+  }
+
+  .conflict-icon {
+    font-size: 24px;
+  }
+
+  .conflict-info {
+    flex: 1;
+  }
+
+  .conflict-eq {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  .conflict-with {
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .conflict-tag {
+    padding: 4px 10px;
+    background: var(--danger);
+    color: white;
+    font-size: 10px;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+
+  .solutions-section {
+    background: var(--bg-card-hover);
+    border-radius: 12px;
+    padding: 12px;
+  }
+
+  .solutions-title {
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--accent);
+  }
+
+  .solution-group {
+    margin-bottom: 12px;
+  }
+
+  .solution-group:last-child {
+    margin-bottom: 0;
+  }
+
+  .solution-label {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+
+  .solution-options {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .solution-option {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 14px;
+    background: var(--bg-dark);
+    border-radius: 10px;
+    text-align: left;
+    color: var(--text-primary);
+    border: 1px solid transparent;
+    transition: all 0.2s;
+  }
+
+  .solution-option:hover {
+    border-color: var(--primary);
+    transform: translateX(4px);
+  }
+
+  .solution-option.premium {
+    background: rgba(255, 170, 0, 0.1);
+  }
+
+  .solution-option.premium:hover {
+    border-color: var(--warning);
+  }
+
+  .option-name {
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .option-price {
+    font-size: 12px;
+    color: var(--primary);
+    font-weight: 600;
+  }
+
+  .solution-option.premium .option-price {
+    color: var(--warning);
+  }
+
+  .timeslot-group {
+    margin-bottom: 8px;
+  }
+
+  .timeslot-group:last-child {
+    margin-bottom: 0;
+  }
+
+  .timeslot-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: 4px;
+  }
+
+  .timeslot-buttons {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .timeslot-btn {
+    padding: 6px 12px;
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    border-radius: 8px;
+    font-size: 12px;
+    border: 1px solid transparent;
+    transition: all 0.2s;
+  }
+
+  .timeslot-btn:hover {
+    border-color: var(--accent);
+    background: rgba(0, 212, 255, 0.1);
+  }
+
+  .conflict-resolved {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px;
+    background: rgba(0, 214, 143, 0.1);
+    border-radius: 10px;
+  }
+
+  .resolved-icon {
+    width: 28px;
+    height: 28px;
+    background: var(--success);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .resolved-text {
+    flex: 1;
+    font-size: 13px;
+    color: var(--success);
+    font-weight: 500;
+  }
+
+  .reset-btn {
+    padding: 6px 12px;
+    background: var(--bg-card-hover);
+    color: var(--text-secondary);
+    border-radius: 8px;
+    font-size: 12px;
+  }
+
+  .reset-btn:hover {
+    background: var(--bg-dark);
+  }
+
+  .no-conflict {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px;
+    background: rgba(0, 214, 143, 0.08);
+    border-radius: 10px;
+    color: var(--success);
+    font-size: 13px;
+  }
+
+  .no-conflict-icon {
+    width: 24px;
+    height: 24px;
+    background: var(--success);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
   }
 </style>

@@ -1,7 +1,9 @@
 <script>
   import { onMount, onDestroy } from 'svelte'
   import { 
-    allBookings, rooms, equipments, bandMembers, timeSlots, selectedDate
+    allBookings, rooms, equipments, bandMembers, timeSlots, selectedDate,
+    equipmentConflicts, selectedConflictSolution, CONFLICT_EQUIPMENT_IDS,
+    downgradedToSectional, attendanceAnalysis, selectedRoom, selectedSlots
   } from '../stores/bookingStore.js'
 
   let currentTime = new Date()
@@ -103,8 +105,23 @@
       {#if nextBooking}
         <div class="next-band-info">
           <div class="band-name">{nextBooking.bandName}</div>
+          {#if nextBooking.downgradedToSectional || $downgradedToSectional}
+            <div class="sectional-badge">🎼 分声部练习</div>
+          {/if}
           <div class="band-time">{getBookingTimeRange(nextBooking)}</div>
           <div class="band-room">{getRoomById(nextBooking.roomId)?.name}</div>
+          
+          {#if nextBooking.conflictSolution || $selectedConflictSolution}
+            <div class="solution-badge">
+              {#if nextBooking.conflictSolution?.type === 'premium' || $selectedConflictSolution?.type === 'premium'}
+                💰 加价使用
+              {:else if nextBooking.conflictSolution?.type === 'room' || $selectedConflictSolution?.type === 'room'}
+                🔄 更换房间
+              {:else if nextBooking.conflictSolution?.type === 'timeslot' || $selectedConflictSolution?.type === 'timeslot'}
+                ⏰ 调换时段
+              {/if}
+            </div>
+          {/if}
           
           <div class="band-members">
             {#each nextBooking.members as memberId}
@@ -115,6 +132,13 @@
               {/if}
             {/each}
           </div>
+          
+          {#if $equipmentConflicts.hasConflict}
+            <div class="wall-conflict-alert">
+              <span class="alert-icon">⚡</span>
+              <span class="alert-text">设备冲突待处理：{$equipmentConflicts.conflicts.map(c => c.eqName).join('、')}</span>
+            </div>
+          {/if}
         </div>
       {:else}
         <div class="no-booking">
@@ -132,15 +156,43 @@
         </div>
         <div class="equip-grid">
           {#each equipments as eq}
-            <div class="equip-item {allEquipmentsInUse.has(eq.id) ? 'in-use' : 'available'}">
+            <div class="equip-item {allEquipmentsInUse.has(eq.id) ? 'in-use' : 'available'} {CONFLICT_EQUIPMENT_IDS.includes(eq.id) ? 'conflict-type' : ''}">
+              {#if CONFLICT_EQUIPMENT_IDS.includes(eq.id)}
+                <span class="conflict-type-badge">热门</span>
+              {/if}
               <span class="equip-icon">{eq.icon}</span>
               <span class="equip-name">{eq.name}</span>
               <span class="equip-status">
                 {allEquipmentsInUse.has(eq.id) ? '使用中' : '空闲'}
               </span>
+              {#if $equipmentConflicts.conflicts.some(c => c.eqId === eq.id)}
+                <span class="conflict-indicator">⚡</span>
+              {/if}
             </div>
           {/each}
         </div>
+        
+        {#if $selectedConflictSolution}
+          <div class="solution-banner">
+            <span class="solution-icon">✓</span>
+            <span class="solution-text">
+              冲突解决方案：
+              {#if $selectedConflictSolution.type === 'premium'}
+                选择加价方案
+              {:else if $selectedConflictSolution.type === 'room'}
+                已更换至 {rooms.find(r => r.id === $selectedConflictSolution.selectedRoom)?.name || rooms.find(r => r.id === $selectedRoom)?.name}
+              {:else if $selectedConflictSolution.type === 'timeslot'}
+                已调换至 {timeSlots.find(s => s.id === $selectedSlots[0])?.start} 开始
+              {/if}
+            </span>
+          </div>
+        {/if}
+        
+        {#if $downgradedToSectional}
+          <div class="sectional-banner">
+            <span>🎼 本场已降级为分声部练习</span>
+          </div>
+        {/if}
       </div>
 
       <div class="panel today-panel">
@@ -634,6 +686,119 @@
     border-top: 1px solid var(--border);
     font-size: 13px;
     color: var(--text-muted);
+  }
+
+  .sectional-badge {
+    padding: 6px 16px;
+    background: rgba(0, 212, 255, 0.2);
+    color: var(--accent);
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .solution-badge {
+    padding: 6px 16px;
+    background: rgba(255, 170, 0, 0.2);
+    color: var(--warning);
+    border-radius: 20px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .wall-conflict-alert {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 20px;
+    background: rgba(255, 71, 87, 0.15);
+    border: 1px solid rgba(255, 71, 87, 0.3);
+    border-radius: 12px;
+    margin-top: 16px;
+    animation: pulse 2s infinite;
+  }
+
+  .alert-icon {
+    font-size: 24px;
+  }
+
+  .alert-text {
+    flex: 1;
+    font-size: 14px;
+    color: var(--danger);
+    font-weight: 500;
+  }
+
+  .equip-item.conflict-type {
+    position: relative;
+  }
+
+  .conflict-type-badge {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    padding: 2px 6px;
+    background: var(--primary);
+    color: white;
+    font-size: 9px;
+    border-radius: 8px;
+    font-weight: 600;
+  }
+
+  .conflict-indicator {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    font-size: 14px;
+    animation: flash 1s infinite;
+  }
+
+  @keyframes flash {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  .solution-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: rgba(0, 214, 143, 0.15);
+    border: 1px solid rgba(0, 214, 143, 0.3);
+    border-radius: 10px;
+    margin-top: 12px;
+  }
+
+  .solution-icon {
+    width: 24px;
+    height: 24px;
+    background: var(--success);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .solution-text {
+    flex: 1;
+    font-size: 13px;
+    color: var(--success);
+    font-weight: 500;
+  }
+
+  .sectional-banner {
+    padding: 10px 14px;
+    background: rgba(0, 212, 255, 0.15);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    border-radius: 10px;
+    margin-top: 12px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--accent);
+    font-weight: 600;
   }
 
   @media (max-width: 1024px) {

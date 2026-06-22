@@ -29,15 +29,35 @@ export const rooms = [
 ]
 
 export const equipments = [
-  { id: 'drum-set', name: '架子鼓', category: 'percussion', icon: '🥁', price: 0, included: true },
-  { id: 'bass-amp', name: '贝斯音箱', category: 'amplifier', icon: '🔊', price: 30, included: false },
-  { id: 'guitar-amp', name: '吉他音箱', category: 'amplifier', icon: '🎸', price: 25, included: false },
-  { id: 'mic-1', name: '人声麦 SM58', category: 'microphone', icon: '🎤', price: 15, included: false },
-  { id: 'mic-2', name: '动圈麦 x2', category: 'microphone', icon: '🎙️', price: 20, included: false },
-  { id: 'keyboard', name: '电子键盘', category: 'keyboard', icon: '🎹', price: 40, included: false },
-  { id: 'audio-interface', name: '录音接口', category: 'recording', icon: '🎚️', price: 50, included: false },
-  { id: 'monitor', name: '监听耳机 x4', category: 'recording', icon: '🎧', price: 25, included: false }
+  { id: 'drum-set', name: '架子鼓', category: 'percussion', icon: '🥁', price: 0, included: true, isConflict: true, premiumMultiplier: 1.5 },
+  { id: 'bass-amp', name: '贝斯音箱', category: 'amplifier', icon: '🔊', price: 30, included: false, isConflict: false, premiumMultiplier: 1.2 },
+  { id: 'guitar-amp', name: '吉他音箱', category: 'amplifier', icon: '🎸', price: 25, included: false, isConflict: true, premiumMultiplier: 1.3 },
+  { id: 'guitar-amp-2', name: '吉他音箱 2号', category: 'amplifier', icon: '🎸', price: 25, included: false, isConflict: true, premiumMultiplier: 1.3 },
+  { id: 'mic-1', name: '人声麦 SM58', category: 'microphone', icon: '🎤', price: 15, included: false, isConflict: false, premiumMultiplier: 1.0 },
+  { id: 'mic-2', name: '动圈麦 x2', category: 'microphone', icon: '🎙️', price: 20, included: false, isConflict: false, premiumMultiplier: 1.0 },
+  { id: 'keyboard', name: '电子键盘', category: 'keyboard', icon: '🎹', price: 40, included: false, isConflict: false, premiumMultiplier: 1.0 },
+  { id: 'audio-interface', name: '录音声卡', category: 'recording', icon: '🎚️', price: 50, included: false, isConflict: true, premiumMultiplier: 1.8 },
+  { id: 'monitor', name: '监听耳机 x4', category: 'recording', icon: '🎧', price: 25, included: false, isConflict: false, premiumMultiplier: 1.0 },
+  { id: 'power-amp', name: '大功率音箱', category: 'amplifier', icon: '📢', price: 60, included: false, isConflict: true, premiumMultiplier: 2.0 }
 ]
+
+export const CONFLICT_EQUIPMENT_IDS = ['drum-set', 'guitar-amp', 'guitar-amp-2', 'audio-interface', 'power-amp']
+
+export const backupMembers = [
+  { id: 'b1', name: '小杰', role: '替补吉他手', instrument: 'guitar', avatar: '🎸', backupFor: ['guitar'] },
+  { id: 'b2', name: '阿龙', role: '替补贝斯手', instrument: 'bass', avatar: '🎻', backupFor: ['bass'] },
+  { id: 'b3', name: '小琳', role: '替补鼓手', instrument: 'drums', avatar: '🥁', backupFor: ['drums'] },
+  { id: 'b4', name: '小海', role: '替补主唱', instrument: 'vocals', avatar: '🎤', backupFor: ['vocals'] },
+  { id: 'b5', name: '小雅', role: '替补键盘手', instrument: 'keyboard', avatar: '🎹', backupFor: ['keyboard'] }
+]
+
+export const KEY_ROLES = ['vocals', 'drums', 'bass', 'guitar']
+
+export const premiumPricing = {
+  sameRoom: { label: '同房间加价', multiplier: 1.2 },
+  otherRoom: { label: '换房间加价', multiplier: 1.5 },
+  offPeak: { label: '非高峰时段', multiplier: 0.8 }
+}
 
 export const bandMembers = [
   { id: 'm1', name: '阿凯', role: '主唱 / 队长', instrument: 'vocals', avatar: '👨‍🎤', isLeader: true },
@@ -78,7 +98,9 @@ export const existingBookings = [
     equipments: ['drum-set', 'bass-amp', 'guitar-amp', 'mic-1'],
     leaderId: 'm1',
     status: 'confirmed',
-    aaMode: 'equal'
+    aaMode: 'equal',
+    memberConfirmations: { m1: 'confirmed', m2: 'confirmed', m3: 'pending', m4: 'declined' },
+    recordingNeeded: false
   },
   {
     id: 'b2',
@@ -90,7 +112,9 @@ export const existingBookings = [
     equipments: ['keyboard', 'guitar-amp'],
     leaderId: 'm5',
     status: 'pending',
-    aaMode: 'equal'
+    aaMode: 'equal',
+    memberConfirmations: { m5: 'pending', m2: 'pending' },
+    recordingNeeded: false
   },
   {
     id: 'b3',
@@ -102,6 +126,22 @@ export const existingBookings = [
     equipments: ['drum-set', 'bass-amp', 'guitar-amp', 'mic-1', 'mic-2', 'keyboard', 'audio-interface', 'monitor'],
     leaderId: 'm1',
     status: 'confirmed',
-    aaMode: 'instrument'
+    aaMode: 'instrument',
+    memberConfirmations: { m1: 'confirmed', m2: 'confirmed', m3: 'confirmed', m4: 'confirmed', m5: 'confirmed' },
+    recordingNeeded: true
+  },
+  {
+    id: 'b4',
+    roomId: 'room-a',
+    date: '2026-06-21',
+    slots: ['t8', 't9'],
+    bandName: '极光乐队',
+    members: ['b1', 'b2', 'b3', 'b4'],
+    equipments: ['drum-set', 'guitar-amp', 'guitar-amp-2', 'audio-interface', 'power-amp', 'mic-1'],
+    leaderId: 'b1',
+    status: 'confirmed',
+    aaMode: 'equal',
+    memberConfirmations: { b1: 'confirmed', b2: 'confirmed', b3: 'confirmed', b4: 'confirmed' },
+    recordingNeeded: true
   }
 ]
